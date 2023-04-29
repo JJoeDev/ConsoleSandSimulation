@@ -27,13 +27,21 @@ void init(Map& map){
   map.grid.resize(map.mapX, std::vector<u16>(map.mapY, 0));
 }
 
-void inputThread(std::queue<char>& inputQueue, std::mutex& queueMutex){
-  while (true){
+void inputThread(std::queue<char>& inputQueue, std::mutex& queueMutex, bool& running){
+  bool run{running};
+
+  while (run){
     char input;
     std::cin >> input;
     queueMutex.lock();
     inputQueue.push(input);
     queueMutex.unlock();
+
+    if (input == 'T'){
+      run = false;
+      printf("TERMINATE");
+    }
+    printf("INPUT");
   }
 }
 
@@ -55,7 +63,7 @@ int main(void){
   std::mutex queueMutex;
 
   // input thread
-  std::thread inputHandler(inputThread, std::ref(inputQueue), std::ref(queueMutex));
+  std::thread inputHandler(inputThread, std::ref(inputQueue), std::ref(queueMutex), std::ref(running));
 
   while(running){
     system(CLEAR);
@@ -106,7 +114,7 @@ int main(void){
         yPos++;
         map->grid[xPos][yPos] = 1;
         break;
-      case 't':
+      case 'T':
         running = false;
         break;
       }
