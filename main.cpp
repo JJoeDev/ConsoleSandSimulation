@@ -7,6 +7,12 @@
 #include <queue>
 #include "Types.h"
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
+static const char* CLEAR="cls";
+#else
+static const char* CLEAR="clear";
+#endif
+
 typedef struct Map{
   u8 mapX{0}; // Max Size of 255
   u8 mapY{0};
@@ -52,7 +58,7 @@ int main(void){
   std::thread inputHandler(inputThread, std::ref(inputQueue), std::ref(queueMutex));
 
   while(running){
-    system("clear");
+    system(CLEAR);
 
     for (int y = 0; y < map->mapY; ++y){
       for (int x = 0; x < map->mapX; ++x){
@@ -115,8 +121,8 @@ int main(void){
 
   inputHandler.join();
 
-  system("clear");
-  printf(" | APPLICATION TERMINATED | ");
+  system(CLEAR);
+  printf("\033[1;31m | APPLICATION TERMINATED | \033[0m\n");
 
   return 0;
 }
