@@ -9,11 +9,37 @@
 #include <termios.h>
 #include "Types.h"
 
+/*
+  BLACK   30 40
+  RED     31 41
+  GREEN   32 42
+  YELLOW  33 43
+  BLUE    34 44
+  MAGENTA 35 45
+  CYAN    36 46
+  WHITE   37 47
+
+  RESET         0
+  BOLD          1
+  UNDERLINE     4
+  INVERSE       7
+  BOLD OFF      21
+  UNDERLINE OFF 24
+  INVERSE OFF   27
+*/
+
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
 static const char* CLEAR="cls";
 #else
 static const char* CLEAR="clear";
 #endif
+
+typedef enum PIXEL{
+  _EMPTY  = 0x0,
+  _PLAYER = 0x1,
+  _SAND   = 0x2,
+  _BRICK  = 0x3
+} PIXEL;
 
 typedef struct Map{
   u8 mapX{0}; // Max Size of 255
@@ -46,10 +72,43 @@ void inputThread(std::queue<char>& inputQueue, std::mutex& queueMutex, bool& run
 using namespace std::chrono_literals;
 
 // PARTICLE UPDATES
-void sandUpdate(Map& map, int& x, int& y){
-  if (map.grid[x][y + 1] == 0 && y > 2){
-    map.grid[x][y] = 0;
-    map.grid[x][y + 1] = 2;
+void particleUpdate(Map& map, int& x, int& y){
+  switch(map.grid[x][y]){
+  default:
+    break;
+  case _SAND:
+    if (y < map.mapY - 1){
+      if(map.grid[x][y + 1] == _EMPTY){
+        map.grid[x][y] = _EMPTY;
+        map.grid[x][y + 1] = _SAND;
+      }
+      else if (map.grid[x + 1][y + 1] == _EMPTY){
+        map.grid[x][y] = _EMPTY;
+        map.grid[x + 1][y + 1] = _SAND;
+      }
+      else if (map.grid[x - 1][y + 1] == _EMPTY){
+        map.grid[x][y] = _EMPTY;
+        map.grid[x - 1][y + 1] = _SAND;
+      }
+    }
+  }
+}
+
+void particleDraw(Map& map, int& x, int& y){
+  switch (map.grid[x][y]){
+  case _EMPTY:
+    printf(".");
+    break;
+  case _PLAYER:
+    printf("\033[1;37m█\033[0m");
+    break;
+  case _SAND:
+    printf("\033[1;43m▒\033[0m");
+    particleUpdate(map, x, y);
+    break;
+  case _BRICK:
+    printf("\033[1;31m█\033[0m");
+    break;
   }
 }
 
@@ -62,6 +121,7 @@ int main(void){
   u8 yPos{15};
 
   u8 currentTile{0};
+  u8 currentDraw{2};
 
   init(*map);
 
@@ -81,26 +141,21 @@ int main(void){
   while(running){
     system(CLEAR);
 
-    for (int y = map->mapY - 2; y > 0; --y){
-    //for (int y = 0; y < map->mapY; ++y){
+    printf("\033[4;36mCOORDS %i | %i\033[0m\n", xPos, yPos);
+    printf("\033[1;32mTILE %i\033[0m\n", currentTile);
+    printf("\033[1;32mCURRENT PIXEL %i\033[0m\n", currentDraw);
+
+    for (int y = 0; y < map->mapY; ++y){
       for (int x = 0; x < map->mapX; ++x){
         if (x % map->mapX == 0){
           printf("\n");
         }
         else{
-          switch(map->grid[x][y]){
-          case 0:
-            printf(".");
-            break;
-          case 1:
-            printf("\033[1;31m█\033[0m");
-            break;
-          case 2:
-            printf("\033[1;33m▒\033[0m");
-            sandUpdate(*map, x, y);
-            break;
-          }
+          particleDraw(*map, x, y);
         }
+
+        fflush(stdout);
+        //std::this_thread::sleep_for(1ms);
       }
     }
 
@@ -126,19 +181,41 @@ int main(void){
         break;
       case 'w':
         map->grid[xPos][yPos] = currentTile;
-        yPos = (yPos < map->mapY - 2) ? yPos += 1 : map->mapY - 2;
+        yPos = (yPos > 0) ? yPos -= 1 : 0;
         currentTile = map->grid[xPos][yPos];
         map->grid[xPos][yPos] = 1;
         break;
       case 's':
         map->grid[xPos][yPos] = currentTile;
-        yPos = (yPos > 2) ? yPos -= 1 : 2;
+        yPos = (yPos < map->mapY - 1) ? yPos += 1 : map->mapY - 1;
         currentTile = map->grid[xPos][yPos];
         map->grid[xPos][yPos] = 1;
         break;
+
+      // PLACEMENT AND DESTRUCTION OF PARTICLE
       case 'e':
-        currentTile = 2;
+        currentTile = currentDraw;
         break;
+      case 'r':
+        for (int y = 0; y < map->mapY; ++y){
+          for (int x = 0; x < map->mapX; ++x){
+            map->grid[x][y] = 0;
+          }
+        }
+      case 'q':
+        currentTile = _EMPTY;
+        break;
+
+      // PARTICLE SELECTION
+      case '1':
+        currentDraw = _SAND;
+        break;
+      case '2':
+        currentDraw = _BRICK;
+        break;
+
+
+      // TERMINATION OF APPLICATION
       case 't':
         running = false;
         break;
@@ -147,9 +224,7 @@ int main(void){
 
     queueMutex.unlock();
 
-    printf("\033[4;36mCOORDS: %i | %i\033[0m", xPos, yPos);
-
-    std::this_thread::sleep_for(1000ms);
+    std::this_thread::sleep_for(16ms);
   }
 
   inputHandler.join();
